@@ -1,0 +1,157 @@
+---
+title: "Introduction"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  warning = F
+)
+# devtools::install_local(force = T)
+# devtools::load_all()
+```
+
+```{r setup}
+library(seascapeR)
+library(sf)
+```
+
+## Get Seascape Dataset information
+
+ERDDAP dataset info and date ranges for two available datasets: global_monthly and global_8day.
+
+```{r}
+# SeaScape dataset info
+ss_gl_mo <- get_ss_info() # default: dataset = "global_monthly"
+ss_gl_8d <- get_ss_info("global_8day")
+ss_gl_mo
+ss_gl_8d
+
+# SeaScape date ranges
+get_ss_dates(ss_gl_mo)
+get_ss_dates(ss_gl_8d)
+```
+
+## Show Information on Seascape Classes
+
+```{r}
+# show dataset of Seascape Global Classes information
+ss_gl_classes
+
+# setup paths for plots generated in tables below
+dir_svg  <- here::here("inst/svg")
+web_svg  <- "../svg"
+
+# show table for Seascape Class 1
+tbl_ss_class(1, dir_svg, web_svg)
+
+# show table for Seascape Class 15
+tbl_ss_class(15, dir_svg, web_svg)
+
+# show table for Seascape Class 33
+tbl_ss_class(33, dir_svg, web_svg)
+```
+
+## Map Seascapes as image tiles
+
+Get interactive map of Seascape classes: 
+
+```{r}
+map_ss_wms(ss_gl_mo)
+```
+
+Note that the image tiles produces by the Web Map Server (WMS) do not contain the data, just tiled image. 
+
+## Define polygon for extraction of Seascapes
+
+You can use any `sf` polygon object. This package has a couple helper functions to get polygons of interest, either a National Marine Sanctuary or a simple bounding box.
+
+```{r}
+# bounding box for the Central Peru Ecoregion. You will need to change this bounding box for other ecoregions
+lon = -80; lat = -9; w = 8
+ply <- bbox_ply(lon - w, lat - w, lon + w, lat + w)
+map_ss_wms(ss_gl_mo, ply)
+```
+
+```{r}
+# setting variables and paths allows for caching data files
+sanctuary = "meow" # or see: ?get_url_ply
+dir_data  = here::here("data_ss2")
+dir_ply   = glue::glue("{dir_data}/ply")
+dir_ply
+
+# # First make sure the polygon files are available on '~/seascapeR/data_ss2/ply'. Then select polygon from the list contained in 'meow_ecos.shp' by changing the ECOREGION name.
+ply <- st_read("data_ss2/ply/meow/meow_ecos.shp") %>% subset(ECOREGION == "Central Peru", geometry) 
+```
+
+```{r}
+# show files
+fs::dir_tree(dir_ply)
+```
+
+```{r}
+# map image tiles with polygon
+map_ss_wms(ss_gl_mo, ply)
+```
+
+## Get Seascape grids within polygon
+
+```{r}
+# variables and paths
+ss_dataset  = "global_monthly" # or "global_8day"
+ss_var      = "CLASS"       # or "P"
+date_beg    = "2012-01-01"
+date_end    = "2021-04-01"
+dir_grd     = glue::glue(
+  "{dir_data}/{sanctuary}_{ss_dataset}")
+
+ss_info <- get_ss_info(dataset = ss_dataset)
+
+# get SeaScape grids from polyon for date range 
+grds <- get_ss_grds(
+  ss_info, ply, 
+  ss_var    = ss_var, 
+  date_beg  = date_beg, 
+  date_end  = date_end,
+  dir_tif   = dir_grd)
+
+# show files
+fs::dir_tree(dir_grd)
+```
+
+## Map Seascape grid with polygon
+
+```{r}
+# get first grid, a raster layer in the raster stack grds
+grd <- raster::raster(grds, 1) # 1 is the first raster of the series extracted and you can change the number to see other dates.
+
+# map SeaScape grid
+map_ss_grd(grd)
+```
+
+## Summarize Seascape grids into a time series table
+
+```{r}
+ts_csv = glue::glue(
+  "{dir_data}/{sanctuary}_{ss_dataset}_{ss_var}.csv")
+
+tbl <- sum_ss_grds_to_ts(grds, ts_csv = ts_csv)
+tbl
+```
+
+
+## Plot Seascapes over time
+
+```{r}
+# plot SeaScape time series
+plot_ss_ts(tbl)
+```
+
